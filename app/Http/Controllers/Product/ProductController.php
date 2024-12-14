@@ -23,7 +23,6 @@ class ProductController extends Controller
     {
         $products = $this->productService->getAllProducts();
         if ($request->wantsJson()) {
-            logger($products);
             if (count($products)<1) {
                 return response()->json(['message' => 'No products available.'], 404);
             }
@@ -38,7 +37,9 @@ class ProductController extends Controller
      */
     public function create()
     {
-        //
+        return inertia('Products/CreateEdit', [
+            'product' => null, 
+        ]);
     }
 
     /**
@@ -56,7 +57,11 @@ class ProductController extends Controller
 
         $images = $request->file('images'); // Get the uploaded images
 
-        $this->productService->createProduct($validatedData, $images);
+        $product= $this->productService->createProduct($validatedData, $images);
+
+        if ($request->wantsJson()) {
+            return response()->json(['message' => 'Product created successfully', 'product' => $product]);
+        }
 
         return redirect()->route('products.index')->with('success', 'Product created successfully.');
     }
@@ -78,7 +83,7 @@ class ProductController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit($idOrSlug)
+    public function edit(Request $request, $idOrSlug)
     {
         $product = $this->productService->getProductByIdOrSlug($idOrSlug);
 
@@ -86,7 +91,13 @@ class ProductController extends Controller
             return redirect()->back()->withErrors(['message' => 'Product not found']);
         }
 
-        return view('products.edit', compact('product'));
+        if ($request->wantsJson()) {
+            return response()->json(['message' => 'Product not found'], 404);
+        }
+
+        return inertia('Products/CreateEdit', [
+            'product' => $product,
+        ]);    
     }
 
     /**
