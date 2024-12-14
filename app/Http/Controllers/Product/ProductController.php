@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Product;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Services\ProductService;
+use Inertia\Inertia;
 
 class ProductController extends Controller
 {
@@ -18,10 +19,18 @@ class ProductController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
         $products = $this->productService->getAllProducts();
-        return response()->json($products);
+        if ($request->wantsJson()) {
+            logger($products);
+            if (count($products)<1) {
+                return response()->json(['message' => 'No products available.'], 404);
+            }
+            return response()->json($products); 
+        }
+
+        return Inertia::render('Products/Index', ['products' => $products]);
     }
 
     /**
@@ -29,7 +38,7 @@ class ProductController extends Controller
      */
     public function create()
     {
-        
+        //
     }
 
     /**
@@ -42,11 +51,14 @@ class ProductController extends Controller
             'description' => ['required', 'string'],
             'price' => ['required', 'numeric'],
             'slug' => ['required', 'string', 'max:255', 'unique:products,slug'],
+            'images.*' => ['image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'], 
         ]);
 
-        $this->productService->createProduct($validatedData);
-        return redirect()->route('products.index')->with('success', 'Product created successfully.');
+        $images = $request->file('images'); // Get the uploaded images
 
+        $this->productService->createProduct($validatedData, $images);
+
+        return redirect()->route('products.index')->with('success', 'Product created successfully.');
     }
 
     /**
@@ -60,7 +72,7 @@ class ProductController extends Controller
             return response()->json(['message' => 'Product not found'], 404);
         }
 
-        return response()->json([ "success" => true, "data" => $product]);
+        return response()->json(["success" => true, "data" => $product]);
     }
 
     /**
@@ -86,9 +98,12 @@ class ProductController extends Controller
             'name' => 'sometimes|required|string|max:255',
             'description' => 'sometimes|required|string',
             'price' => 'sometimes|required|integer|min:1',
+            'images.*' => ['image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'], // Validate images
         ]);
 
-        $updated = $this->productService->updateProduct($id, $validatedData);
+        $images = $request->file('images'); // Get the uploaded images, if any
+
+        $updated = $this->productService->updateProduct($id, $validatedData, $images);
 
         if (!$updated) {
             return response()->json(['message' => 'Product not found or update failed'], 400);
