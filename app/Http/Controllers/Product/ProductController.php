@@ -47,24 +47,50 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
-        $validatedData = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'description' => ['required', 'string'],
-            'price' => ['required', 'numeric'],
-            'slug' => ['required', 'string', 'max:255', 'unique:products,slug'],
-            'images.*' => ['image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'], 
-        ]);
+        // logger('requestAll');
+        // logger($request->all());
+        // Validation rules with custom error messages
+        $validatedData = $request->validate(
+            [
+                'name' => ['required', 'string', 'max:255'],
+                'description' => ['required', 'string'],
+                'price' => ['required', 'numeric'],
+                'images.*' => ['image', 'max:2048'],
+            ],
+            [
+                'name.required' => 'The product name is required.',
+                'description.required' => 'Please provide a description for the product.',
+                'price.required' => 'Price is mandatory and must be a valid number.',
+                'images.*.image' => 'Each file must be an image.',
+            ]
+        );
+        $images = $request->file('images');
 
-        $images = $request->file('images'); // Get the uploaded images
-
-        $product= $this->productService->createProduct($validatedData, $images);
-
-        if ($request->wantsJson()) {
-            return response()->json(['message' => 'Product created successfully', 'product' => $product]);
+        if (!$images) {
+            if($request->wantsJson()){
+                return response()->json(['message' => 'Please upload at least one image.'], 422);
+            }
+            else{
+                return redirect()->route('products.create')
+                    ->withErrors(['images.*' => 'Please upload at least one image.'])
+                    ->withInput();
+            }
         }
-
-        return redirect()->route('products.index')->with('success', 'Product created successfully.');
-    }
+    
+        // Save product using service
+        $product = $this->productService->createProduct($validatedData, $images);
+    
+        // Respond with JSON for API or redirect for web requests
+        if ($request->wantsJson()) {
+            return response()->json([
+                'message' => 'Product created successfully',
+                'product' => $product
+            ], 201);
+        }
+    
+        return redirect()->route('products.index')
+            ->with('success', 'Product created successfully.');
+    }    
 
     /**
      * Display the specified resource.

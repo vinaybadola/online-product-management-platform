@@ -1,10 +1,13 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, defineEmits } from 'vue';
+
+// Declare the emit function
+const emit = defineEmits(['update:images']); 
 
 const selectedImages = ref([]);
 
 const handleImageUpload = (event) => {
-    const files = Array.from(event.target.files);
+    const files = Array.from(event.target.files); 
     selectedImages.value = files;
     emit('update:images', files);
 };
