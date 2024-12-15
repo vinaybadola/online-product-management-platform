@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\ProductImage;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
 
 class ProductService
 {
@@ -53,9 +54,11 @@ class ProductService
         }
     }
 
-    public function getAllProducts()
+    public function getAllProducts($page, $perPage)
     {
-        return Product::with('images')->get();
+        return Product::with('images')
+        ->orderBy('created_at', 'desc')
+        ->paginate($perPage, ['*'], 'page', $page);  
     }
 
     public function getProductByIdOrSlug($idOrSlug)

@@ -19,9 +19,9 @@ const form = useForm({
 
 const handleSubmit = () => {
     if (form.id) {
-        form.put(route('products.update', form.id));
+        form.put(route('products.update', form.id), { preserveScroll: true });
     } else {
-        form.post(route('products.store'));
+        form.post(route('products.store'), { preserveScroll: true });
     }
 };
 </script>

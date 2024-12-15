@@ -23,7 +23,13 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         try {
-            $products = $this->productService->getAllProducts();
+
+            // Handle the pagination 
+            $page = $request->query('page', 1);  
+            $perPage = $request->query('per_page', 10);
+
+
+            $products = $this->productService->getAllProducts($page, $perPage);
             if ($request->wantsJson()) {
                 if (count($products) < 1) {
                     return response()->json(['message' => 'No products available.'], 404);
@@ -42,7 +48,7 @@ class ProductController extends Controller
      */
     public function create()
     {
-        return inertia('Products/CreateEdit', [
+        return Inertia('Products/CreateEdit', [
             'product' => null,
         ]);
     }
@@ -140,9 +146,11 @@ class ProductController extends Controller
             }
 
             if ($request->wantsJson()) {
-                return response()->json(['message' => 'Product not found'], 404);
+                if (!$product) {
+                    return response()->json(['message' => 'Product not found'], 404);
+                }
+                return response()->json($product);
             }
-
             return inertia('Products/CreateEdit', [
                 'product' => $product,
             ]);
@@ -153,29 +161,55 @@ class ProductController extends Controller
 
     /**
      * Update the specified resource in storage.
+     * TODO: fix the image updation problem
      */
     public function update(Request $request, string $id)
     {
         try {
+            // Validate the request data
             $validatedData = $request->validate([
                 'name' => 'sometimes|required|string|max:255|unique:products,name,' . $id,
                 'description' => 'sometimes|required|string',
                 'price' => 'sometimes|required|integer|min:1',
+                'color' => 'sometimes|string|nullable',
+                'brand' => 'sometimes|string|nullable',
+                'stock' => 'sometimes|integer|min:0',
+                'size' => 'sometimes|string|nullable',
+                'tags' => 'sometimes|string|nullable',
                 'images.*' => ['image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
             ]);
 
-            $images = $request->file('images');
 
-            $updated = $this->productService->updateProduct($id, $validatedData, $images);
-
-            if (!$updated) {
-                return response()->json(['message' => 'Product not found or update failed'], 400);
+            // Merge additional fields from the request
+            $additionalData = $request->only(['color', 'brand', 'stock', 'size', 'tags']);
+            
+            // Ensure tags are properly formatted as JSON
+            if (isset($additionalData['tags'])) {
+                $additionalData['tags'] = json_encode(explode(',', $additionalData['tags']));
             }
 
-            return response()->json(['message' => 'Product updated successfully']);
+            $data = array_merge($validatedData, $additionalData);
+
+            $images = $request->file('images');
+
+            $updated = $this->productService->updateProduct($id, $data, $images);
+
+            if (!$updated) {
+                if ($request->wantsJson()) {
+                    return response()->json(['message' => 'Product not found or update failed'], 400);
+                }
+                return redirect()->back()->withErrors(['message' => 'Product not found or update failed']);
+            }
+
+            if ($request->wantsJson()) {
+                return response()->json(['message' => 'Product updated successfully']);
+            }
+
+            return redirect()->route('products.index')->with('success', 'Product updated successfully');
         } catch (ValidationException $e) {
             return response()->json(['errors' => $e->errors()], 422);
         } catch (\Exception $e) {
+            logger('Error occurred while updating product: ' . $e->getMessage());
             return response()->json(['message' => 'An error occurred while updating the product.'], 500);
         }
     }
