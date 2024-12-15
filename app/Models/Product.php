@@ -7,7 +7,17 @@ use Illuminate\Support\Str;
 
 class Product extends Model
 {
-    protected $fillable = ['name', 'description', 'price','slug'];
+    protected $fillable = [
+        'name', 
+        'description', 
+        'price',
+        'slug', 
+        'color',
+        'brand',
+        'stock',
+        'size',
+        'tags'
+    ];
 
 
     public static function boot()

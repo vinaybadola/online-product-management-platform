@@ -5,11 +5,16 @@ namespace App\Services;
 use App\Models\Product;
 use App\Models\ProductImage;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class ProductService
 {
     public function createProduct(array $data, $images = null)
     {
+        // check if product is already created throw validation error
+        if (Product::where('name', $data['name'])->exists()) {
+            throw ValidationException::withMessages(['name' => 'Product already exists']);
+        }
         $product = Product::create($data);
 
         if ($images) {

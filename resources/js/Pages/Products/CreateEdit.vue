@@ -1,88 +1,146 @@
 <script setup>
-import { ref, reactive, computed } from 'vue';
 import { useForm } from '@inertiajs/vue3';
-import ImageUploader from './ImageUploader.vue'; // Update the path if necessary
+import ImageUploader from './ImageUploader.vue';
+import './css/ProductForm.css';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
-// Initialize the form using useForm for Inertia
-const form = reactive({
-    id: null, // Optional, for editing
+const form = useForm({
+    id: null,
     name: '',
     description: '',
-    price: '',
+    price: null,
     color: '',
     brand: '',
-    stock: '',
+    stock: 0,
     size: '',
-    tags: '',
-    images: [], // Placeholder for image files
+    tags: [],
+    images: []
 });
 
-// Ref for selected images from the ImageUploader
-const selectedImages = ref([]);
-
-// Handle form submission
 const handleSubmit = () => {
-    const formData = new FormData();
-
-    // Append form fields to FormData
-    for (const key in form) {
-        if (key === 'images') {
-            // Append each image file individually
-            selectedImages.value.forEach((file) => {
-                formData.append('images[]', file);
-            });
-        } else {
-            formData.append(key, form[key]);
-        }
+    if (form.id) {
+        form.put(route('products.update', form.id));
+    } else {
+        form.post(route('products.store'));
     }
-
-    // Make the POST or PUT request
-    const url = form.id
-        ? route('products.update', { id: form.id })
-        : route('products.store');
-
-    axios.post(url, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-    })
-    .then(() => {
-        alert('Product successfully saved!');
-        window.location = route('products.index'); // Redirect to product listing
-    })
-    .catch((error) => {
-        console.error('Error saving product:', error.response.data.errors);
-    });
 };
 </script>
 
 <template>
-    <div>
-        <h1 class="text-xl font-bold mb-4">
-            {{ form.id ? 'Edit Product' : 'Add Product' }}
-        </h1>
-        <form @submit.prevent="handleSubmit" enctype="multipart/form-data">
-            <div v-if="form.errors" class="text-red-500 mb-4">
-                <ul>
-                    <li v-for="(error, field) in form.errors" :key="field">
-                        {{ error }}
-                    </li>
-                </ul>
+    <AuthenticatedLayout>
+    <div class="product-form-container">
+        <div class="form-card">
+            <div class="form-header">
+                <h1>{{ form.id ? 'Edit Product' : 'Add Product' }}</h1>
             </div>
 
-            <input v-model="form.name" name="name" placeholder="Name" class="block mb-4" />
-            <textarea v-model="form.description" name="description" placeholder="Description" class="block mb-4"></textarea>
-            <input v-model="form.price" name="price" type="number" placeholder="Price" class="block mb-4" />
-            <input v-model="form.color" name="color" placeholder="Color" class="block mb-4" />
-            <input v-model="form.brand" name="brand" placeholder="Brand" class="block mb-4" />
-            <input v-model="form.stock" name="stock" type="number" placeholder="Stock" class="block mb-4" />
-            <input v-model="form.size" name="size" placeholder="Size" class="block mb-4" />
-            <textarea v-model="form.tags" name="tags" placeholder="Tags (comma-separated)" class="block mb-4"></textarea>
+            <form @submit.prevent="handleSubmit" class="form-content">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="name">Product Name</label>
+                        <input 
+                            id="name"
+                            v-model="form.name" 
+                            type="text"
+                            placeholder="Enter product name"
+                            required
+                        />
+                        <span v-if="form.errors.name" class="error">{{ form.errors.name }}</span>
+                    </div>
 
-            <!-- Image uploader component -->
-            <ImageUploader v-model:images="selectedImages" />
+                    <div class="form-group full-width">
+                        <label for="description">Description</label>
+                        <textarea 
+                            id="description"
+                            v-model="form.description" 
+                            placeholder="Enter product description"
+                            rows="4"
+                            required
+                        ></textarea>
+                        <span v-if="form.errors.description" class="error">{{ form.errors.description }}</span>
+                    </div>
 
-            <button type="submit" class="bg-blue-500 text-white py-2 px-4 rounded">
-                {{ form.id ? 'Update Product' : 'Create Product' }}
-            </button>
-        </form>
+                    <div class="form-group">
+                        <label for="price">Price</label>
+                        <input 
+                            id="price"
+                            v-model="form.price" 
+                            type="number" 
+                            step="0.01"
+                            placeholder="0.00"
+                            required
+                        />
+                        <span v-if="form.errors.price" class="error">{{ form.errors.price }}</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="stock">Stock</label>
+                        <input 
+                            id="stock"
+                            v-model="form.stock" 
+                            type="number"
+                            placeholder="0"
+                            required
+                        />
+                        <span v-if="form.errors.stock" class="error">{{ form.errors.stock }}</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="color">Color</label>
+                        <input 
+                            id="color"
+                            v-model="form.color" 
+                            type="text"
+                            placeholder="Product color"
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="size">Size</label>
+                        <input 
+                            id="size"
+                            v-model="form.size" 
+                            type="text"
+                            placeholder="Product size"
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="brand">Brand</label>
+                        <input 
+                            id="brand"
+                            v-model="form.brand" 
+                            type="text"
+                            placeholder="Product brand"
+                        />
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="tags">Tags</label>
+                        <input 
+                            id="tags"
+                            v-model="form.tags" 
+                            type="text"
+                            placeholder="Enter tags (comma-separated)"
+                        />
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label>Product Images</label>
+                        <ImageUploader v-model:images="form.images" />
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" @click="$inertia.visit(route('products.index'))">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn-primary" :disabled="form.processing">
+                        {{ form.id ? 'Update Product' : 'Create Product' }}
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
+</AuthenticatedLayout>
 </template>

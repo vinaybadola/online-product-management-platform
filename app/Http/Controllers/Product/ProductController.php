@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Services\ProductService;
 use Inertia\Inertia;
+use Illuminate\Validation\ValidationException;
 
 class ProductController extends Controller
 {
@@ -21,15 +22,19 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-        $products = $this->productService->getAllProducts();
-        if ($request->wantsJson()) {
-            if (count($products)<1) {
-                return response()->json(['message' => 'No products available.'], 404);
+        try {
+            $products = $this->productService->getAllProducts();
+            if ($request->wantsJson()) {
+                if (count($products) < 1) {
+                    return response()->json(['message' => 'No products available.'], 404);
+                }
+                return response()->json($products);
             }
-            return response()->json($products); 
-        }
 
-        return Inertia::render('Products/Index', ['products' => $products]);
+            return Inertia::render('Products/Index', ['products' => $products]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'An error occurred while fetching products.'], 500);
+        }
     }
 
     /**
@@ -38,7 +43,7 @@ class ProductController extends Controller
     public function create()
     {
         return inertia('Products/CreateEdit', [
-            'product' => null, 
+            'product' => null,
         ]);
     }
 
@@ -47,63 +52,79 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
-        // logger('requestAll');
-        // logger($request->all());
-        // Validation rules with custom error messages
-        $validatedData = $request->validate(
-            [
-                'name' => ['required', 'string', 'max:255'],
-                'description' => ['required', 'string'],
-                'price' => ['required', 'numeric'],
-                'images.*' => ['image', 'max:2048'],
-            ],
-            [
-                'name.required' => 'The product name is required.',
-                'description.required' => 'Please provide a description for the product.',
-                'price.required' => 'Price is mandatory and must be a valid number.',
-                'images.*.image' => 'Each file must be an image.',
-            ]
-        );
-        $images = $request->file('images');
+        try {
+            $validatedData = $request->validate(
+                [
+                    'name' => ['required', 'string', 'max:255', 'unique:products,name'],
+                    'description' => ['required', 'string'],
+                    'price' => ['required', 'numeric'],
+                    'images.*' => ['image', 'max:2048'],
+                ],
+                [
+                    'name.required' => 'The product name is required.',
+                    'name.unique' => 'A product with the same name already exists.',
+                    'description.required' => 'Please provide a description for the product.',
+                    'price.required' => 'Price is mandatory and must be a valid number.',
+                    'images.*.image' => 'Each file must be an image.',
+                ]
+            );
 
-        if (!$images) {
-            if($request->wantsJson()){
-                return response()->json(['message' => 'Please upload at least one image.'], 422);
+            $images = $request->file('images');
+
+            if (!$images) {
+                if ($request->wantsJson()) {
+                    return response()->json(['message' => 'Please upload at least one image.'], 422);
+                } else {
+                    return redirect()->route('products.create')
+                        ->withErrors(['images.*' => 'Please upload at least one image.'])
+                        ->withInput();
+                }
             }
-            else{
-                return redirect()->route('products.create')
-                    ->withErrors(['images.*' => 'Please upload at least one image.'])
-                    ->withInput();
+
+            $product = $this->productService->createProduct($validatedData, $images);
+            if (!$product) {
+                if ($request->wantsJson()) {
+                    return response()->json(['message' => 'Failed to create product.'], 500);
+                } else {
+                    return redirect()->route('products.create')
+                        ->withErrors(['message' => 'Failed to create product.'])
+                        ->withInput();
+                }
             }
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Product created successfully',
+                    'product' => $product
+                ], 201);
+            }
+
+            return redirect()->route('products.index')
+                ->with('success', 'Product created successfully.');
+        } catch (ValidationException $e) {
+            return response()->json(['errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            logger(' Error occurred while creating product: ' . $e->getMessage());
+            return response()->json(['message' => 'An error occurred while creating the product.'], 500);
         }
-    
-        // Save product using service
-        $product = $this->productService->createProduct($validatedData, $images);
-    
-        // Respond with JSON for API or redirect for web requests
-        if ($request->wantsJson()) {
-            return response()->json([
-                'message' => 'Product created successfully',
-                'product' => $product
-            ], 201);
-        }
-    
-        return redirect()->route('products.index')
-            ->with('success', 'Product created successfully.');
-    }    
+    }
 
     /**
      * Display the specified resource.
      */
     public function show($idOrSlug)
     {
-        $product = $this->productService->getProductByIdOrSlug($idOrSlug);
+        try {
+            $product = $this->productService->getProductByIdOrSlug($idOrSlug);
 
-        if (!$product) {
-            return response()->json(['message' => 'Product not found'], 404);
+            if (!$product) {
+                return response()->json(['message' => 'Product not found'], 404);
+            }
+
+            return response()->json(["success" => true, "data" => $product]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'An error occurred while fetching the product.'], 500);
         }
-
-        return response()->json(["success" => true, "data" => $product]);
     }
 
     /**
@@ -111,19 +132,23 @@ class ProductController extends Controller
      */
     public function edit(Request $request, $idOrSlug)
     {
-        $product = $this->productService->getProductByIdOrSlug($idOrSlug);
+        try {
+            $product = $this->productService->getProductByIdOrSlug($idOrSlug);
 
-        if (!$product) {
-            return redirect()->back()->withErrors(['message' => 'Product not found']);
+            if (!$product) {
+                return redirect()->back()->withErrors(['message' => 'Product not found']);
+            }
+
+            if ($request->wantsJson()) {
+                return response()->json(['message' => 'Product not found'], 404);
+            }
+
+            return inertia('Products/CreateEdit', [
+                'product' => $product,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'An error occurred while fetching the product.'], 500);
         }
-
-        if ($request->wantsJson()) {
-            return response()->json(['message' => 'Product not found'], 404);
-        }
-
-        return inertia('Products/CreateEdit', [
-            'product' => $product,
-        ]);    
     }
 
     /**
@@ -131,22 +156,28 @@ class ProductController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $validatedData = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'description' => 'sometimes|required|string',
-            'price' => 'sometimes|required|integer|min:1',
-            'images.*' => ['image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'], // Validate images
-        ]);
+        try {
+            $validatedData = $request->validate([
+                'name' => 'sometimes|required|string|max:255|unique:products,name,' . $id,
+                'description' => 'sometimes|required|string',
+                'price' => 'sometimes|required|integer|min:1',
+                'images.*' => ['image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
+            ]);
 
-        $images = $request->file('images'); // Get the uploaded images, if any
+            $images = $request->file('images');
 
-        $updated = $this->productService->updateProduct($id, $validatedData, $images);
+            $updated = $this->productService->updateProduct($id, $validatedData, $images);
 
-        if (!$updated) {
-            return response()->json(['message' => 'Product not found or update failed'], 400);
+            if (!$updated) {
+                return response()->json(['message' => 'Product not found or update failed'], 400);
+            }
+
+            return response()->json(['message' => 'Product updated successfully']);
+        } catch (ValidationException $e) {
+            return response()->json(['errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'An error occurred while updating the product.'], 500);
         }
-
-        return response()->json(['message' => 'Product updated successfully']);
     }
 
     /**
@@ -154,12 +185,16 @@ class ProductController extends Controller
      */
     public function destroy(string $id)
     {
-        $deleted = $this->productService->deleteProduct($id);
+        try {
+            $deleted = $this->productService->deleteProduct($id);
 
-        if (!$deleted) {
-            return response()->json(['message' => 'Product not found or deletion failed'], 400);
+            if (!$deleted) {
+                return response()->json(['message' => 'Product not found or deletion failed'], 400);
+            }
+
+            return response()->json(['message' => 'Product deleted successfully']);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'An error occurred while deleting the product.'], 500);
         }
-
-        return response()->json(['message' => 'Product deleted successfully']);
     }
 }

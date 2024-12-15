@@ -2,7 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
 
-
+// Props
 defineProps({
     products: {
         type: Array,
@@ -10,11 +10,33 @@ defineProps({
     },
 });
 
+const getProductImageUrl = (images) => {
+    if (images && images.length > 0) {
+        return `/storage/${images[0].image_path}`;
+    }
+    return '/placeholder-image.jpg';
+};
+
 const navigateToCreateProduct = () => {
-    router.visit(route('products.create'));};
+    router.visit(route('products.create'));
+};
 
 const navigateToEditProduct = (productId) => {
-    router.push({ name: 'products.edit', params: { idOrSlug: productId } });
+    router.visit(route('products.edit', { id: productId }));
+};
+
+const deleteProduct = (productId) => {
+    if (confirm('Are you sure you want to delete this product?')) {
+        axios.delete(route('products.destroy', productId))
+            .then(() => {
+                alert('Product deleted successfully');
+                window.location.reload();
+            })
+            .catch((error) => {
+                alert('Failed to delete the product', error);
+                console.error(error);
+            });
+    }
 };
 </script>
 
@@ -22,7 +44,6 @@ const navigateToEditProduct = (productId) => {
     <Head title="Products" />
 
     <AuthenticatedLayout>
-        <!-- Header -->
         <template #header>
             <h2 class="text-xl font-semibold leading-tight text-gray-800">Products</h2>
             <div class="add-product">
@@ -35,15 +56,21 @@ const navigateToEditProduct = (productId) => {
             </div>
         </template>
 
-        <!-- Main content -->
         <div class="py-12">
             <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
-                        <!-- Product grid -->
                         <div v-if="products.length" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            <div v-for="product in products" :key="product.id" class="product-card border rounded-lg p-4 shadow-md">
-                                <img :src="product.image_url" alt="Product Image" class="w-full h-48 object-cover rounded-md mb-4" />
+                            <div
+                                v-for="product in products"
+                                :key="product.id"
+                                class="product-card border rounded-lg p-4 shadow-md"
+                            >
+                                <img
+                                    :src="getProductImageUrl(product.images)"
+                                    alt="Product Image"
+                                    class="w-full h-48 object-cover rounded-md mb-4"
+                                />
                                 <h2 class="text-lg font-semibold">{{ product.name }}</h2>
                                 <p class="text-gray-600 mb-2">{{ product.description }}</p>
                                 <p class="text-blue-600 font-bold">₹{{ product.price }}</p>
@@ -52,6 +79,12 @@ const navigateToEditProduct = (productId) => {
                                     class="mt-2 bg-blue-500 text-white py-1 px-2 rounded"
                                 >
                                     Edit
+                                </button>
+                                <button
+                                    @click="deleteProduct(product.id)"
+                                    class="mt-5 mx-4 bg-blue-500 text-white py-1 px-2 rounded"
+                                >
+                                    Delete
                                 </button>
                             </div>
                         </div>
