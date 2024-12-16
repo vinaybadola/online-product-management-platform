@@ -14,8 +14,8 @@ return new class extends Migration
             $table->string('description');
             $table->integer('price');
             $table->string('slug')->unique();
-            $table->string('color');
-            $table->string('brand');
+            $table->string('color')->nullable();
+            $table->string('brand')->nullable();
             $table->integer('stock')->default(0);
             $table->string('size')->nullable();
             $table->json('tags')->nullable();

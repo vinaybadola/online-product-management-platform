@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Services\ProductService;
 use Inertia\Inertia;
+use Illuminate\Validation\ValidationException;
 
 class ProductController extends Controller
 {
@@ -21,16 +22,24 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-        $products = $this->productService->getAllProducts();
-        if ($request->wantsJson()) {
-            logger($products);
-            if (count($products)<1) {
-                return response()->json(['message' => 'No products available.'], 404);
-            }
-            return response()->json($products); 
-        }
+        try {
+            $page = $request->query('page', 1);
+            $perPage = $request->query('per_page', 10);
 
-        return Inertia::render('Products/Index', ['products' => $products]);
+            $filters = $request->only(['color', 'brand', 'size', 'tags', 'min_price', 'max_price']);
+
+            $products = $this->productService->getAllProducts($filters, $page, $perPage);
+
+            if ($request->wantsJson()) {
+                if (!$products) {
+                    return response()->json(['message' => 'No products available.'], 404);
+                }
+                return response()->json($products);
+            }
+            return Inertia::render('Products/Index', ['products' => $products]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'An error occurred while fetching products.'], 500);
+        }
     }
 
     /**
@@ -38,78 +47,191 @@ class ProductController extends Controller
      */
     public function create()
     {
-        //
+        return Inertia('Products/CreateEdit', [
+            'product' => null,
+        ]);
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
-    {
-        $validatedData = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'description' => ['required', 'string'],
-            'price' => ['required', 'numeric'],
-            'slug' => ['required', 'string', 'max:255', 'unique:products,slug'],
-            'images.*' => ['image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'], 
+
+public function store(Request $request)
+{
+    try {
+        $validatedData = $request->validate(
+            [
+                'name' => ['required', 'string', 'max:255', 'unique:products,name'],
+                'description' => ['required', 'string'],
+                'price' => ['required', 'numeric'],
+                'color' => 'sometimes|string|nullable',
+                'brand' => 'sometimes|string|nullable',
+                'stock' => 'sometimes|integer|min:0',
+                'size' => 'sometimes|string|nullable',
+                'tags' => 'sometimes|string|nullable',
+                'images.*' => ['image', 'max:2048'],
+            ],
+            [
+                'name.required' => 'The product name is required.',
+                'name.unique' => 'A product with the same name already exists.',
+                'description.required' => 'Please provide a description for the product.',
+                'price.required' => 'Price is mandatory and must be a valid number.',
+                'images.*.image' => 'Each file must be an image.',
+            ]
+        );
+
+        $images = $request->file('images');
+
+        if (!$images) {
+            if ($request->wantsJson()) {
+                return response()->json(['message' => 'Please upload at least one image.'], 422);
+            } else {
+                return Inertia::render('Products/CreateEdit', [
+                    'errors' => ['images.*' => 'Please upload at least one image.'],
+                    'input' => $request->all()
+                ]);
+            }
+        }
+
+        if ($request->has('tags') && is_string($request->tags)) {
+            $tagsArray = array_map('trim', explode(',', $request->tags));
+            $validatedData['tags'] = json_encode($tagsArray);
+        }
+
+        $product = $this->productService->createProduct($validatedData, $images);
+
+        if (!$product) {
+            return Inertia::render('Products/CreateEdit', [
+                'errors' => ['message' => 'Failed to create product.'],
+                'input' => $request->all()
+            ]);
+        }
+
+        return Inertia::render('Products/Index', [
+            'message' => 'Product created successfully!',
+            'product' => $product
         ]);
-
-        $images = $request->file('images'); // Get the uploaded images
-
-        $this->productService->createProduct($validatedData, $images);
-
-        return redirect()->route('products.index')->with('success', 'Product created successfully.');
+    } catch (ValidationException $e) {
+        return Inertia::render('Products/CreateEdit', [
+            'errors' => $e->errors(),
+            'input' => $request->all()
+        ]);
+    } catch (\Exception $e) {
+        logger('Error occurred while creating product: ' . $e->getMessage());
+        return Inertia::render('Products/CreateEdit', [
+            'errors' => ['message' => 'An error occurred while creating the product.'],
+            'input' => $request->all()
+        ]);
     }
+}
+
 
     /**
      * Display the specified resource.
      */
-    public function show($idOrSlug)
+    public function show( Request $request, $idOrSlug)
     {
-        $product = $this->productService->getProductByIdOrSlug($idOrSlug);
+        try {
+            if(!$idOrSlug){
+                
+                return response()->json(['message' => 'id or slug is required'], 422);
 
-        if (!$product) {
-            return response()->json(['message' => 'Product not found'], 404);
+            }
+            $product = $this->productService->getProductByIdOrSlug($idOrSlug);
+
+            if($request->wantsJson()) {
+                if (!$product) {
+                    return response()->json(['message' => 'Product not found'], 404);
+                }
+                return response()->json($product);
+            }
+            if(!$product){
+                return redirect()->back()->withErrors(['message' => 'Product not found']);
+            }
+            return Inertia::render('Products/Show', [
+                'params' => ['idOrSlug' => $idOrSlug],
+            ]);
+            return response()->json(["success" => true, "data" => $product]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'An error occurred while fetching the product.'], 500);
         }
-
-        return response()->json(["success" => true, "data" => $product]);
     }
 
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit($idOrSlug)
+    public function edit(Request $request, $idOrSlug)
     {
-        $product = $this->productService->getProductByIdOrSlug($idOrSlug);
+        try {
+            $product = $this->productService->getProductByIdOrSlug($idOrSlug);
 
-        if (!$product) {
-            return redirect()->back()->withErrors(['message' => 'Product not found']);
+            if (!$product) {
+                return redirect()->back()->withErrors(['message' => 'Product not found']);
+            }
+
+            if ($request->wantsJson()) {
+                if (!$product) {
+                    return response()->json(['message' => 'Product not found'], 404);
+                }
+                return response()->json($product);
+            }
+            return inertia('Products/Edit', [
+                'product' => $product,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'An error occurred while fetching the product.'], 500);
         }
-
-        return view('products.edit', compact('product'));
     }
 
     /**
      * Update the specified resource in storage.
+     * 
      */
     public function update(Request $request, string $id)
     {
-        $validatedData = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'description' => 'sometimes|required|string',
-            'price' => 'sometimes|required|integer|min:1',
-            'images.*' => ['image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'], // Validate images
-        ]);
+        try {
+            $validatedData = $request->validate([
+                'name' => 'sometimes|required|string|max:255|unique:products,name,' . $id,
+                'description' => 'sometimes|required|string',
+                'price' => 'sometimes|required|integer|min:1',
+                'color' => 'sometimes|string|nullable',
+                'brand' => 'sometimes|string|nullable',
+                'stock' => 'sometimes|integer|min:0',
+                'size' => 'sometimes|string|nullable',
+                'tags' => 'sometimes|string|nullable',
+                'images.*' => ['image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
+            ]);
+            $additionalData = $request->only(['color', 'brand', 'stock', 'size', 'tags']);
 
-        $images = $request->file('images'); // Get the uploaded images, if any
+            if ($request->has('tags') && is_string($request->tags)) {
+                $tagsArray = array_map('trim', explode(',', $request->tags));
+                $validatedData['tags'] = json_encode($tagsArray);
+            }
 
-        $updated = $this->productService->updateProduct($id, $validatedData, $images);
+            $data = array_merge($validatedData, $additionalData);
 
-        if (!$updated) {
-            return response()->json(['message' => 'Product not found or update failed'], 400);
+            $images = $request->file('images');
+
+            $updated = $this->productService->updateProduct($id, $data, $images);
+
+            if (!$updated) {
+                if ($request->wantsJson()) {
+                    return response()->json(['message' => 'Product not found or update failed'], 400);
+                }
+                return redirect()->back()->withErrors(['message' => 'Product not found or update failed']);
+            }
+
+            if ($request->wantsJson()) {
+                return response()->json(['message' => 'Product updated successfully']);
+            }
+
+            return redirect()->route('products.index')->with('success', 'Product updated successfully');
+        } catch (ValidationException $e) {
+            return response()->json(['errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            logger('Error occurred while updating product: ' . $e->getMessage());
+            return response()->json(['message' => 'An error occurred while updating the product.'], 500);
         }
-
-        return response()->json(['message' => 'Product updated successfully']);
     }
 
     /**
@@ -117,12 +239,17 @@ class ProductController extends Controller
      */
     public function destroy(string $id)
     {
-        $deleted = $this->productService->deleteProduct($id);
+        try {
+            $deleted = $this->productService->deleteProduct($id);
 
-        if (!$deleted) {
-            return response()->json(['message' => 'Product not found or deletion failed'], 400);
+            if (!$deleted) {
+                return response()->json(['message' => 'Product not found or deletion failed'], 400);
+            }
+
+            return response()->json(['message' => 'Product deleted successfully']);
+        } catch (\Exception $e) {
+            logger('Error occurred while deleting product: ' . $e->getMessage());
+            return response()->json(['message' => 'An error occurred while deleting the product.'], 500);
         }
-
-        return response()->json(['message' => 'Product deleted successfully']);
     }
 }
