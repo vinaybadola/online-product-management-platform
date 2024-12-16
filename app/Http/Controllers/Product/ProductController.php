@@ -23,20 +23,19 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         try {
-
-            // Handle the pagination 
-            $page = $request->query('page', 1);  
+            $page = $request->query('page', 1);
             $perPage = $request->query('per_page', 10);
 
+            $filters = $request->only(['color', 'brand', 'size', 'tags', 'min_price', 'max_price']);
 
-            $products = $this->productService->getAllProducts($page, $perPage);
+            $products = $this->productService->getAllProducts($filters, $page, $perPage);
+
             if ($request->wantsJson()) {
-                if (count($products) < 1) {
+                if (!$products) {
                     return response()->json(['message' => 'No products available.'], 404);
                 }
                 return response()->json($products);
             }
-
             return Inertia::render('Products/Index', ['products' => $products]);
         } catch (\Exception $e) {
             return response()->json(['message' => 'An error occurred while fetching products.'], 500);
@@ -64,6 +63,11 @@ class ProductController extends Controller
                     'name' => ['required', 'string', 'max:255', 'unique:products,name'],
                     'description' => ['required', 'string'],
                     'price' => ['required', 'numeric'],
+                    'color' => 'sometimes|string|nullable',
+                    'brand' => 'sometimes|string|nullable',
+                    'stock' => 'sometimes|integer|min:0',
+                    'size' => 'sometimes|string|nullable',
+                    'tags' => 'sometimes|string|nullable',
                     'images.*' => ['image', 'max:2048'],
                 ],
                 [
@@ -86,7 +90,9 @@ class ProductController extends Controller
                         ->withInput();
                 }
             }
-
+            if ($request->has('tags') && is_string($request->tags)) {
+                $validatedData['tags'] = json_encode(array_map('trim', explode(',', $request->tags)));
+            }
             $product = $this->productService->createProduct($validatedData, $images);
             if (!$product) {
                 if ($request->wantsJson()) {
@@ -118,15 +124,28 @@ class ProductController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show($idOrSlug)
+    public function show( Request $request, $idOrSlug)
     {
         try {
+            if(!$idOrSlug){
+                
+                return response()->json(['message' => 'id or slug is required'], 422);
+
+            }
             $product = $this->productService->getProductByIdOrSlug($idOrSlug);
 
-            if (!$product) {
-                return response()->json(['message' => 'Product not found'], 404);
+            if($request->wantsJson()) {
+                if (!$product) {
+                    return response()->json(['message' => 'Product not found'], 404);
+                }
+                return response()->json($product);
             }
-
+            if(!$product){
+                return redirect()->back()->withErrors(['message' => 'Product not found']);
+            }
+            return Inertia::render('Products/Show', [
+                'params' => ['idOrSlug' => $idOrSlug],
+            ]);
             return response()->json(["success" => true, "data" => $product]);
         } catch (\Exception $e) {
             return response()->json(['message' => 'An error occurred while fetching the product.'], 500);
@@ -182,7 +201,7 @@ class ProductController extends Controller
 
             // Merge additional fields from the request
             $additionalData = $request->only(['color', 'brand', 'stock', 'size', 'tags']);
-            
+
             // Ensure tags are properly formatted as JSON
             if (isset($additionalData['tags'])) {
                 $additionalData['tags'] = json_encode(explode(',', $additionalData['tags']));

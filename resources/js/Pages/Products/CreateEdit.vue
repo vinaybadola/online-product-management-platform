@@ -21,7 +21,14 @@ const handleSubmit = () => {
     if (form.id) {
         form.put(route('products.update', form.id), { preserveScroll: true });
     } else {
-        form.post(route('products.store'), { preserveScroll: true });
+        form.post(route('products.store'), { preserveScroll: true ,
+            onSuccess: () => {
+                alert('Product successfully created!');
+            },
+            onError: (errors) => {
+                alert('An error occurred while creating the product.');
+            }
+        });
     }
 };
 </script>

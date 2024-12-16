@@ -53,11 +53,35 @@ class ProductService
             ]);
         }
     }
-
-    public function getAllProducts($page, $perPage)
+    public function getAllProducts($filters, $page, $perPage)
     {
-        return Product::with('images')
-        ->orderBy('created_at', 'desc')
+        $query = Product::query();
+
+        if (!empty($filters['color'])) {
+            $query->whereIn('color', $filters['color']);
+        }
+    
+        if (!empty($filters['brand'])) {
+            $query->where('brand', $filters['brand']);
+        }
+    
+        if (!empty($filters['size'])) {
+            $query->where('size', $filters['size']);
+        }
+    
+        if (!empty($filters['tags'])) {
+            $query->whereJsonContains('tags', $filters['tags']);
+        }
+    
+        if (!empty($filters['min_price'])) {
+            $query->where('price', '>=', $filters['min_price']);
+        }
+    
+        if (!empty($filters['max_price'])) {
+            $query->where('price', '<=', $filters['max_price']);
+        }
+        return $query->orderBy('created_at', 'desc')
+        ->with('images')
         ->paginate($perPage, ['*'], 'page', $page);  
     }
 
