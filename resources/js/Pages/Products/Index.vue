@@ -57,8 +57,11 @@ const deleteProduct = (productId) => {
     }
 };
 
-const fetchProducts = (filters = {}) => {
-    axios.get(route('products.index'), { params: filters })
+const fetchProducts = () => {
+    const query = new URLSearchParams(window.location.search);
+    const filtersFromURL = Object.fromEntries(query.entries());
+
+    axios.get(route('products.index'), { params: filtersFromURL })
         .then((response) => {
             products.value = response.data;
         })
@@ -108,7 +111,18 @@ const applyFilters = () => {
         max_price: maxPrice.value,
     };
 
-    fetchProducts(appliedFilters);
+    // Remove empty filters
+    const query = Object.fromEntries(
+        Object.entries(appliedFilters).filter(([_, value]) => {
+            return Array.isArray(value) ? value.length > 0 : value !== null && value !== '';
+        })
+    );
+
+    router.get(route('products.index'), query, { 
+        replace: true, // Appends to URL without creating history
+        preserveState: true, // Maintains component state
+        preserveScroll: true // Avoids scrolling to the top
+    });
 };
 
 const isMobileFiltersOpen = ref(false);
@@ -159,8 +173,7 @@ onMounted(() => {
                                     {{ activeFilters.size }}
                                 </span>
                             </button>
-                            <button v-if="activeFilters.size" 
-                                @click="resetFilters"
+                            <button @click="resetFilters"
                                 class="text-sm text-gray-500 hover:text-gray-700">
                                 Reset all
                             </button>
@@ -174,8 +187,7 @@ onMounted(() => {
                             <div class="p-4">
                                 <div class="flex items-center justify-between mb-4">
                                     <h2 class="text-lg font-medium text-gray-900">Filters</h2>
-                                    <button v-if="activeFilters.size" 
-                                        @click="resetFilters"
+                                    <button @click="resetFilters"
                                         class="text-sm text-gray-500 hover:text-gray-700">
                                         Reset all
                                     </button>
