@@ -4,7 +4,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import {router } from '@inertiajs/vue3';
 import { ImageIcon } from 'lucide-vue-next';
 import { Link } from '@inertiajs/vue3';
-
+import "./css/index.css"
 const products = ref({
     data: [],
     current_page: 1,
@@ -77,7 +77,6 @@ const goToPage = (url) => {
     });
 };
 
-
 const fetchFilters = () => {
     axios.get(route('products.index')) 
         .then((response) => {
@@ -114,16 +113,6 @@ const applyFilters = () => {
 
 const isMobileFiltersOpen = ref(false);
 const activeFilters = ref(new Set());
-
-// Add function to track active filters
-const updateActiveFilters = () => {
-    activeFilters.value.clear();
-    if (selectedColors.value.length) activeFilters.value.add('colors');
-    if (selectedBrand.value) activeFilters.value.add('brand');
-    if (selectedSize.value) activeFilters.value.add('size');
-    if (selectedTags.value.length) activeFilters.value.add('tags');
-    if (minPrice.value || maxPrice.value) activeFilters.value.add('price');
-};
 
 // Add reset filters function
 const resetFilters = () => {
@@ -347,47 +336,3 @@ onMounted(() => {
         </div>
     </AuthenticatedLayout>
 </template>
-
-
-<style scoped>
-.product-card {
-    display: flex;
-    flex-direction: column;
-    background: white;
-}
-
-.product-card img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.product-card {
-    display: flex;
-    flex-direction: column;
-    background: white;
-}
-
-.product-card img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-.flex-shrink-0 {
-    flex-shrink: 0;
-}
-</style>

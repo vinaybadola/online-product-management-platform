@@ -26,7 +26,8 @@ const handleSubmit = () => {
                 alert('Product successfully created!');
             },
             onError: (errors) => {
-                alert('An error occurred while creating the product.');
+                console.dir(errors, {depth : null});
+                alert(errors.name[0]);
             }
         });
     }

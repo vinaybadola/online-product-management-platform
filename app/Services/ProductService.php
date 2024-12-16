@@ -6,8 +6,7 @@ use App\Models\Product;
 use App\Models\ProductImage;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Facades\DB;
-
+use Intervention\Image\Laravel\Facades\Image;
 class ProductService
 {
     public function createProduct(array $data, $images = null)
@@ -32,7 +31,6 @@ class ProductService
         if (!$product) {
             return false;
         }
-
         $product->update($data);
 
         if ($images) {
@@ -45,11 +43,24 @@ class ProductService
     private function storeImages(Product $product, $images)
     {
         foreach ($images as $image) {
-            $path = $image->store('product_images', 'public'); 
-
+            // Validate the image
+            $image = Image::make($image);
+    
+            // Main Image Upload
+            $imageName = time() . '-' . $image->getClientOriginalName();
+            $destinationPath = public_path('images/products/');
+            $image->save($destinationPath . $imageName); // Save the main image
+    
+            // Generate Thumbnail Image
+            $thumbnailPath = public_path('images/products/thumbnails/');
+            $image->resize(100, 100);  // Resize to thumbnail size
+            $image->save($thumbnailPath . $imageName); // Save the thumbnail
+    
+            // Store in the database
             ProductImage::create([
                 'product_id' => $product->id,
-                'image_path' => $path,
+                'image_path' => 'images/products/' . $imageName, // Save the path for main image
+                'thumbnail_path' => 'images/products/thumbnails/' . $imageName, // Save the path for thumbnail image
             ]);
         }
     }

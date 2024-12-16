@@ -55,71 +55,76 @@ class ProductController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
-    {
-        try {
-            $validatedData = $request->validate(
-                [
-                    'name' => ['required', 'string', 'max:255', 'unique:products,name'],
-                    'description' => ['required', 'string'],
-                    'price' => ['required', 'numeric'],
-                    'color' => 'sometimes|string|nullable',
-                    'brand' => 'sometimes|string|nullable',
-                    'stock' => 'sometimes|integer|min:0',
-                    'size' => 'sometimes|string|nullable',
-                    'tags' => 'sometimes|string|nullable',
-                    'images.*' => ['image', 'max:2048'],
-                ],
-                [
-                    'name.required' => 'The product name is required.',
-                    'name.unique' => 'A product with the same name already exists.',
-                    'description.required' => 'Please provide a description for the product.',
-                    'price.required' => 'Price is mandatory and must be a valid number.',
-                    'images.*.image' => 'Each file must be an image.',
-                ]
-            );
 
-            $images = $request->file('images');
+public function store(Request $request)
+{
+    try {
+        $validatedData = $request->validate(
+            [
+                'name' => ['required', 'string', 'max:255', 'unique:products,name'],
+                'description' => ['required', 'string'],
+                'price' => ['required', 'numeric'],
+                'color' => 'sometimes|string|nullable',
+                'brand' => 'sometimes|string|nullable',
+                'stock' => 'sometimes|integer|min:0',
+                'size' => 'sometimes|string|nullable',
+                'tags' => 'sometimes|string|nullable',
+                'images.*' => ['image', 'max:2048'],
+            ],
+            [
+                'name.required' => 'The product name is required.',
+                'name.unique' => 'A product with the same name already exists.',
+                'description.required' => 'Please provide a description for the product.',
+                'price.required' => 'Price is mandatory and must be a valid number.',
+                'images.*.image' => 'Each file must be an image.',
+            ]
+        );
 
-            if (!$images) {
-                if ($request->wantsJson()) {
-                    return response()->json(['message' => 'Please upload at least one image.'], 422);
-                } else {
-                    return redirect()->route('products.create')
-                        ->withErrors(['images.*' => 'Please upload at least one image.'])
-                        ->withInput();
-                }
-            }
-            if ($request->has('tags') && is_string($request->tags)) {
-                $validatedData['tags'] = json_encode(array_map('trim', explode(',', $request->tags)));
-            }
-            $product = $this->productService->createProduct($validatedData, $images);
-            if (!$product) {
-                if ($request->wantsJson()) {
-                    return response()->json(['message' => 'Failed to create product.'], 500);
-                } else {
-                    return redirect()->route('products.create')
-                        ->withErrors(['message' => 'Failed to create product.'])
-                        ->withInput();
-                }
-            }
+        $images = $request->file('images');
 
+        if (!$images) {
             if ($request->wantsJson()) {
-                return response()->json([
-                    'message' => 'Product created successfully',
-                    'product' => $product
-                ], 201);
+                return response()->json(['message' => 'Please upload at least one image.'], 422);
+            } else {
+                return Inertia::render('Products/CreateEdit', [
+                    'errors' => ['images.*' => 'Please upload at least one image.'],
+                    'input' => $request->all()
+                ]);
             }
-
-            return redirect()->route('products.index')
-                ->with('success', 'Product created successfully.');
-        } catch (ValidationException $e) {
-            return response()->json(['errors' => $e->errors()], 422);
-        } catch (\Exception $e) {
-            logger(' Error occurred while creating product: ' . $e->getMessage());
-            return response()->json(['message' => 'An error occurred while creating the product.'], 500);
         }
+
+        if ($request->has('tags') && is_string($request->tags)) {
+            $tagsArray = array_map('trim', explode(',', $request->tags));
+            $validatedData['tags'] = json_encode($tagsArray);
+        }
+
+        $product = $this->productService->createProduct($validatedData, $images);
+
+        if (!$product) {
+            return Inertia::render('Products/CreateEdit', [
+                'errors' => ['message' => 'Failed to create product.'],
+                'input' => $request->all()
+            ]);
+        }
+
+        return Inertia::render('Products/Index', [
+            'message' => 'Product created successfully!',
+            'product' => $product
+        ]);
+    } catch (ValidationException $e) {
+        return Inertia::render('Products/CreateEdit', [
+            'errors' => $e->errors(),
+            'input' => $request->all()
+        ]);
+    } catch (\Exception $e) {
+        logger('Error occurred while creating product: ' . $e->getMessage());
+        return Inertia::render('Products/CreateEdit', [
+            'errors' => ['message' => 'An error occurred while creating the product.'],
+            'input' => $request->all()
+        ]);
     }
+}
+
 
     /**
      * Display the specified resource.
@@ -170,7 +175,7 @@ class ProductController extends Controller
                 }
                 return response()->json($product);
             }
-            return inertia('Products/CreateEdit', [
+            return inertia('Products/Edit', [
                 'product' => $product,
             ]);
         } catch (\Exception $e) {
@@ -180,12 +185,11 @@ class ProductController extends Controller
 
     /**
      * Update the specified resource in storage.
-     * TODO: fix the image updation problem
+     * 
      */
     public function update(Request $request, string $id)
     {
         try {
-            // Validate the request data
             $validatedData = $request->validate([
                 'name' => 'sometimes|required|string|max:255|unique:products,name,' . $id,
                 'description' => 'sometimes|required|string',
@@ -197,14 +201,11 @@ class ProductController extends Controller
                 'tags' => 'sometimes|string|nullable',
                 'images.*' => ['image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
             ]);
-
-
-            // Merge additional fields from the request
             $additionalData = $request->only(['color', 'brand', 'stock', 'size', 'tags']);
 
-            // Ensure tags are properly formatted as JSON
-            if (isset($additionalData['tags'])) {
-                $additionalData['tags'] = json_encode(explode(',', $additionalData['tags']));
+            if ($request->has('tags') && is_string($request->tags)) {
+                $tagsArray = array_map('trim', explode(',', $request->tags));
+                $validatedData['tags'] = json_encode($tagsArray);
             }
 
             $data = array_merge($validatedData, $additionalData);
@@ -247,6 +248,7 @@ class ProductController extends Controller
 
             return response()->json(['message' => 'Product deleted successfully']);
         } catch (\Exception $e) {
+            logger('Error occurred while deleting product: ' . $e->getMessage());
             return response()->json(['message' => 'An error occurred while deleting the product.'], 500);
         }
     }
