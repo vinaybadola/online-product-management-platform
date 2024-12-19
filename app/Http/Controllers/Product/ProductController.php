@@ -16,7 +16,6 @@ class ProductController extends Controller
     {
         $this->productService = $productService;
     }
-
     /**
      * Display a listing of the resource.
      */
@@ -38,24 +37,26 @@ class ProductController extends Controller
             }
             return Inertia::render('Products/Index', ['products' => $products]);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'An error occurred while fetching products.'], 500);
+            return $this->handleErrorResponse($request, ['message' => 'An error occurred while fetching products.'], $e->getCode());
         }
     }
-
     /**
      * Show the form for creating a new resource.
      */
-    public function create()
+    public function create(Request $request)
     {
-        return Inertia('Products/CreateEdit', [
-            'product' => null,
-        ]);
+        try{
+            return Inertia('Products/CreateEdit', [
+                'product' => null,
+            ]);
+        }
+        catch(\Exception $e){
+            return $this->handleErrorResponse($request, ['message' => 'An error occurred while creating the product.'], $e->getCode());
+        }
     }
-
     /**
      * Store a newly created resource in storage.
      */
-
     public function store(Request $request)
     {
         try {
@@ -95,7 +96,7 @@ class ProductController extends Controller
         
             if ($request->has('tags') && is_string($request->tags)) {
                 $tagsArray = array_map('trim', explode(',', $request->tags));
-                $validatedData['tags'] = json_encode($tagsArray);
+                $validatedData['tags'] = $tagsArray;
             }
         
             $product = $this->productService->createProduct($validatedData, $images);
@@ -118,14 +119,9 @@ class ProductController extends Controller
             ]);
         } catch (\Exception $e) {
             logger('Error occurred while creating product: ' . $e->getMessage());
-            return Inertia::render('Products/CreateEdit', [
-                'errors' => ['message' => 'An error occurred while creating the product.'],
-                'input' => $request->all()
-            ]);
+            return $this->handleErrorResponse($request, ['message' => 'An error occurred while creating the product.'], $e->getCode() );
         }
     }
-
-
     /**
      * Display the specified resource.
      */
@@ -153,7 +149,8 @@ class ProductController extends Controller
             ]);
             return response()->json(["success" => true, "data" => $product]);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'An error occurred while fetching the product.'], 500);
+            logger('Error occurred while fetching product: ' . $e->getMessage());
+            return $this->handleErrorResponse($request, ['message' => 'An error occurred while fetching the product.'],  $e->getCode());
         }
     }
 
@@ -179,7 +176,8 @@ class ProductController extends Controller
                 'product' => $product,
             ]);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'An error occurred while fetching the product.'], 500);
+            logger('Error occurred while fetching product: ' . $e->getMessage());
+            return $this->handleErrorResponse($request, ['message' => 'An error occurred while fetching the product.'], 500);
         }
     }
 
@@ -205,7 +203,7 @@ class ProductController extends Controller
 
             if ($request->has('tags') && is_string($request->tags)) {
                 $tagsArray = array_map('trim', explode(',', $request->tags));
-                $validatedData['tags'] = json_encode($tagsArray);
+                $validatedData['tags'] = $tagsArray;
             }
 
             $data = array_merge($validatedData, $additionalData);
@@ -227,17 +225,17 @@ class ProductController extends Controller
 
             return redirect()->route('products.index')->with('success', 'Product updated successfully');
         } catch (ValidationException $e) {
-            return response()->json(['errors' => $e->errors()], 422);
+            return $this->handleErrorResponse($request, ['errors' => $e->errors()]);
         } catch (\Exception $e) {
             logger('Error occurred while updating product: ' . $e->getMessage());
-            return response()->json(['message' => 'An error occurred while updating the product.'], 500);
+            return $this->handleErrorResponse($request, ['message' => 'An error occurred while creating the product.']);
         }
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy( Request $request, string $id)
     {
         try {
             $deleted = $this->productService->deleteProduct($id);
@@ -249,7 +247,19 @@ class ProductController extends Controller
             return response()->json(['message' => 'Product deleted successfully']);
         } catch (\Exception $e) {
             logger('Error occurred while deleting product: ' . $e->getMessage());
-            return response()->json(['message' => 'An error occurred while deleting the product.'], 500);
+            return $this->handleErrorResponse($request, ['message' => 'An error occurred while deleting the product.'], 500);
         }
+    }
+
+    private function handleErrorResponse(Request $request, array $errorResponse, int $status = 422)
+    {
+        if ($request->wantsJson()) {
+            return response()->json($errorResponse, $status);
+        }
+    
+        return Inertia::render('Products/CreateEdit', [
+            'errors' => $errorResponse,
+            'input' => $request->all(),
+        ]);
     }
 }

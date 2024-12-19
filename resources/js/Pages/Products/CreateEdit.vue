@@ -27,7 +27,7 @@ const handleSubmit = () => {
             },
             onError: (errors) => {
                 console.dir(errors, {depth : null});
-                alert(errors.name[0]);
+                alert(errors.name);
             }
         });
     }

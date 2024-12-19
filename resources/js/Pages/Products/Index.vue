@@ -91,7 +91,7 @@ const fetchFilters = () => {
             filters.value.tags = [
                 ...new Set(
                     allProducts.flatMap(product =>
-                        product.tags ? JSON.parse(product.tags) : []
+                        product.tags ? product.tags : []
                     ).filter(Boolean)
                 )
             ];
