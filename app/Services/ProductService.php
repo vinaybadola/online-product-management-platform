@@ -15,6 +15,8 @@ class ProductService
         if (Product::where('name', $data['name'])->exists()) {
             throw ValidationException::withMessages(['name' => 'Product already exists']);
         }
+        logger('createdData');
+        logger($data);
         $product = Product::create($data);
 
         if ($images) {
@@ -31,9 +33,13 @@ class ProductService
         if (!$product) {
             return false;
         }
+        logger('updateProduct');
+        logger($data);
         $product->update($data);
 
         if ($images) {
+            logger('images');
+            logger($images);
             $this->storeImages($product, $images);
         }
 
@@ -43,24 +49,11 @@ class ProductService
     private function storeImages(Product $product, $images)
     {
         foreach ($images as $image) {
-            // Validate the image
-            $image = Image::make($image);
-    
-            // Main Image Upload
-            $imageName = time() . '-' . $image->getClientOriginalName();
-            $destinationPath = public_path('images/products/');
-            $image->save($destinationPath . $imageName); // Save the main image
-    
-            // Generate Thumbnail Image
-            $thumbnailPath = public_path('images/products/thumbnails/');
-            $image->resize(100, 100);  // Resize to thumbnail size
-            $image->save($thumbnailPath . $imageName); // Save the thumbnail
-    
-            // Store in the database
+            $path = $image->store('product_images', 'public'); 
+
             ProductImage::create([
                 'product_id' => $product->id,
-                'image_path' => 'images/products/' . $imageName, // Save the path for main image
-                'thumbnail_path' => 'images/products/thumbnails/' . $imageName, // Save the path for thumbnail image
+                'image_path' => $path,
             ]);
         }
     }

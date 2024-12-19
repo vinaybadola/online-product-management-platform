@@ -79,11 +79,11 @@
                       <dd class="mt-1 text-sm text-gray-900">
                         <div class="flex flex-wrap gap-2">
                           <span 
-                            v-for="tag in (product?.tags?.split(',') || [])" 
+                            v-for="tag in (product?.tags || [])" 
                             :key="tag"
                             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
                           >
-                            {{ tag.trim() }}
+                            {{ tag }}
                           </span>
                           <span v-if="!product?.tags" class="text-gray-500">No tags available</span>
                         </div>

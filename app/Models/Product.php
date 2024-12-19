@@ -19,6 +19,9 @@ class Product extends Model
         'tags'
     ];
 
+    protected $casts = [
+        'tags' => 'array',
+    ];
 
     public static function boot()
     {
